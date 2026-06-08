@@ -43,21 +43,22 @@ func TestComputeLayoutNarrow(t *testing.T) {
 
 func TestSessionIndexAt(t *testing.T) {
 	l := ComputeLayout(120, 40)
-	row0 := l.sessionRow0
 	const count = 3
+	row0 := l.sessionRow0()
 
 	tests := []struct {
 		name string
 		x, y int
 		want int
 	}{
-		{"first session, name line", 2, row0, 0},
-		{"first session, subtitle line", 2, row0 + 1, 0},
-		{"second session, name line", 2, row0 + 2, 1},
-		{"second session, subtitle line", 2, row0 + 3, 1},
-		{"third session", 2, row0 + 4, 2},
+		{"first session, topic line", 2, row0, 0},
+		{"first session, task line", 2, row0 + 1, 0},
+		{"first session, phase line", 2, row0 + 2, 0},
+		{"second session, topic line", 2, row0 + 3, 1},
+		{"second session, phase line", 2, row0 + 5, 1},
+		{"third session", 2, row0 + 6, 2},
 		{"above the list (header)", 2, row0 - 1, -1},
-		{"below the last session", 2, row0 + 2*count, -1},
+		{"below the last session", 2, row0 + linesPerSession*count, -1},
 		{"right of the sidebar", l.SidebarTotal, row0, -1},
 		{"negative x", -1, row0, -1},
 	}

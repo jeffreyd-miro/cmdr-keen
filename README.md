@@ -6,9 +6,42 @@ color (crunching / waiting on you / all done), plus an embedded pane for the
 active session. Keystrokes pass straight through to Claude — keen only adds the
 list, the names, and the statuses.
 
+![keen running several Claude Code sessions behind one screen](docs/images/cmdr-keen.png)
+
 See [`docs/spec.md`](docs/spec.md) for the full design and milestones.
 
-## Build
+## Install
+
+With a Go toolchain (1.26+), install the `keen` binary straight from the repo:
+
+```sh
+go install github.com/jeffreyd-miro/cmdr-keen/cmd/keen@latest
+```
+
+This drops `keen` into your `$GOBIN` (defaults to `~/go/bin`). Make sure that
+directory is on your `PATH`:
+
+```sh
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+To **upgrade** later, re-run the same command, or pin a specific release:
+
+```sh
+go install github.com/jeffreyd-miro/cmdr-keen/cmd/keen@latest   # newest tag
+go install github.com/jeffreyd-miro/cmdr-keen/cmd/keen@v0.1.0   # a fixed version
+```
+
+`go install` is per-user — every user runs it for themselves. To install once
+for **all** users on a machine, install it as yourself and copy the binary into
+a shared directory on the system `PATH`:
+
+```sh
+go install github.com/jeffreyd-miro/cmdr-keen/cmd/keen@latest
+sudo cp "$(go env GOPATH)/bin/keen" /usr/local/bin/keen
+```
+
+### Build from source
 
 Build **both** binaries into `bin/` — keen locates the hook helper next to
 itself:
@@ -21,9 +54,11 @@ go build -o bin/cc-deck-hook ./cmd/cc-deck-hook
 ## Run
 
 ```sh
-./bin/keen          # one session: `claude --permission-mode auto` in $PWD
-./bin/keen -- bash  # wrap an arbitrary command instead (handy for testing)
+keen                # one session: `claude --permission-mode auto` in $PWD
+keen -- bash        # wrap an arbitrary command instead (handy for testing)
 ```
+
+(If you built from source instead of installing, run `./bin/keen`.)
 
 Each session is spawned with hooks injected via `claude --settings <tempfile>`,
 so your global `~/.claude` is never modified.
@@ -43,6 +78,16 @@ so your global `~/.claude` is never modified.
 
 When the session is focused, everything (typing, paste, mouse scroll/click) goes
 straight to Claude. Only the prefix key is intercepted.
+
+### Copying and pasting
+
+Because keen captures the mouse for the session, a normal click-drag won't
+select text — it gets sent to Claude. To select and copy text, **hold Option
+while you drag** (on most macOS terminals this bypasses mouse capture and does a
+native text selection); then copy as usual.
+
+You can **drag files into** the session to insert their paths, but **pasting
+files in may not work** — drag them in instead.
 
 ## Status colors
 

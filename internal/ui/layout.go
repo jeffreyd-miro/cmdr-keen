@@ -13,16 +13,14 @@ type Layout struct {
 	SidebarW     int // sidebar content width (inside its border)
 	SidebarTotal int // SidebarW + 2
 
-	PaneW, PaneH         int // pane content size == emulator size
+	PaneW, PaneH             int // pane content size == emulator size
 	PaneScreenX, PaneScreenY int // 0-based screen coords of pane content cell (0,0)
-
-	sessionRow0 int // 0-based screen row of the first session entry
 }
 
 const (
-	defaultSidebarW = 24
-	sidebarHeader   = 2 // "sessions" title + one blank line
-	boxBorder       = 2 // a lipgloss border adds 1 cell on each side
+	defaultSidebarW = 30 // fits a topic, task, and a phase word + context bar
+	sidebarHeader   = 2  // "sessions" title + one blank line
+	boxBorder       = 2  // a lipgloss border adds 1 cell on each side
 )
 
 // ComputeLayout derives geometry from the terminal size.
@@ -50,14 +48,30 @@ func ComputeLayout(w, h int) Layout {
 		PaneH:        paneH,
 		PaneScreenX:  sidebarTotal + 1, // past sidebar box + pane's left border
 		PaneScreenY:  1,                // past pane's top border
-		sessionRow0:  1 + sidebarHeader, // past sidebar top border + header lines
 	}
 }
 
+// showLegend reports whether the color key fits below the session list without
+// pushing any session or the bottom hint out of the box. The legend lives below
+// the list, so on short or session-heavy terminals it yields and the list stays
+// fully visible. RenderSidebar consults this so what's drawn and where clicks
+// land can never disagree.
+func (l Layout) showLegend(count int) bool {
+	contentH := l.H - boxBorder
+	need := sidebarHeader + legendHeight() + count*linesPerSession + 1 // +1 for the hint
+	return contentH >= need
+}
+
+// sessionRow0 is the 0-based screen row of the first session entry. The legend
+// now sits below the list, so the rows always start right after the header.
+func (l Layout) sessionRow0() int {
+	return 1 + sidebarHeader // past sidebar top border + header lines
+}
+
 // linesPerSession is how many sidebar rows one session occupies. RenderSidebar
-// draws two rows per entry — the status+name line and the faint title/branch
-// subtitle (see render.go) — so hit-testing must step by two to stay aligned.
-const linesPerSession = 2
+// draws three rows per entry — topic, current task, and phase+context bar (see
+// render.go) — so hit-testing must step by three to stay aligned.
+const linesPerSession = 3
 
 // SessionIndexAt returns the session row index a click landed on, or -1 if the
 // click wasn't on a session entry in the sidebar.
@@ -65,7 +79,7 @@ func (l Layout) SessionIndexAt(x, y, count int) int {
 	if x < 0 || x >= l.SidebarTotal {
 		return -1
 	}
-	rel := y - l.sessionRow0
+	rel := y - l.sessionRow0()
 	if rel < 0 {
 		return -1
 	}

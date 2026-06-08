@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/vt"
 )
 
 // KeyToBytes reconstructs the terminal wire bytes for a Bubble Tea key event so
@@ -94,64 +94,72 @@ var specialKeys = map[tea.KeyType][]byte{
 	tea.KeyF12: []byte("\x1b[24~"),
 }
 
-// MouseToSGR encodes a mouse event into an SGR mouse report, translating screen
-// coordinates into the active pane's local coordinate space. Returns nil if the
-// event is outside the pane. Lets in-session scroll/click reach Claude.
-func MouseToSGR(m tea.MouseMsg, l Layout) []byte {
-	// Pane content origin in 0-based screen coords.
+// MouseToVT translates a Bubble Tea mouse event into a vt mouse event in the
+// active pane's local coordinate space, ready to hand to the emulator's
+// SendMouse. The emulator forwards it to Claude using whatever mouse mode and
+// encoding Claude negotiated (and silently drops it if Claude isn't tracking
+// the mouse), so keen never has to guess the wire format. The bool is false
+// when the event falls outside the pane.
+func MouseToVT(m tea.MouseMsg, l Layout) (vt.Mouse, bool) {
+	// Pane content origin in 0-based screen coords; vt wants 0-based local.
 	px := m.X - l.PaneScreenX
 	py := m.Y - l.PaneScreenY
 	if px < 0 || py < 0 || px >= l.PaneW || py >= l.PaneH {
-		return nil
+		return nil, false
 	}
 
-	cb, ok := buttonCode(m.Button)
-	if !ok {
-		return nil
-	}
-	if m.Action == tea.MouseActionMotion {
-		cb += 32
-	}
+	mouse := uv.Mouse{X: px, Y: py, Button: buttonToVT(m.Button)}
 	if m.Shift {
-		cb += 4
+		mouse.Mod |= vt.ModShift
 	}
 	if m.Alt {
-		cb += 8
+		mouse.Mod |= vt.ModAlt
 	}
 	if m.Ctrl {
-		cb += 16
+		mouse.Mod |= vt.ModCtrl
 	}
 
-	final := byte('M') // press / motion / wheel
-	if m.Action == tea.MouseActionRelease {
-		final = 'm'
+	switch {
+	case isWheel(m.Button):
+		return vt.MouseWheel(mouse), true
+	case m.Action == tea.MouseActionRelease:
+		return vt.MouseRelease(mouse), true
+	case m.Action == tea.MouseActionMotion:
+		return vt.MouseMotion(mouse), true
+	default: // press
+		return vt.MouseClick(mouse), true
 	}
-	// SGR coordinates are 1-based.
-	return []byte(fmt.Sprintf("\x1b[<%d;%d;%d%c", cb, px+1, py+1, final))
 }
 
-func buttonCode(b tea.MouseButton) (int, bool) {
+func isWheel(b tea.MouseButton) bool {
+	switch b {
+	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown,
+		tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
+		return true
+	}
+	return false
+}
+
+func buttonToVT(b tea.MouseButton) vt.MouseButton {
 	switch b {
 	case tea.MouseButtonLeft:
-		return 0, true
+		return vt.MouseLeft
 	case tea.MouseButtonMiddle:
-		return 1, true
+		return vt.MouseMiddle
 	case tea.MouseButtonRight:
-		return 2, true
-	case tea.MouseButtonNone: // motion with no button held
-		return 3, true
+		return vt.MouseRight
 	case tea.MouseButtonWheelUp:
-		return 64, true
+		return vt.MouseWheelUp
 	case tea.MouseButtonWheelDown:
-		return 65, true
+		return vt.MouseWheelDown
 	case tea.MouseButtonWheelLeft:
-		return 66, true
+		return vt.MouseWheelLeft
 	case tea.MouseButtonWheelRight:
-		return 67, true
+		return vt.MouseWheelRight
 	case tea.MouseButtonBackward:
-		return 128, true
+		return vt.MouseBackward
 	case tea.MouseButtonForward:
-		return 129, true
+		return vt.MouseForward
 	}
-	return 0, false
+	return vt.MouseNone
 }

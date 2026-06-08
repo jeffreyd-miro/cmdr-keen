@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/vt"
 )
 
 func TestKeyToBytes(t *testing.T) {
@@ -103,85 +104,96 @@ func TestKeyToBytesPaste(t *testing.T) {
 	}
 }
 
-func TestMouseToSGR(t *testing.T) {
+func TestMouseToVT(t *testing.T) {
 	// A pane whose content origin sits at screen (27, 1).
 	l := ComputeLayout(120, 40)
 
-	t.Run("left press translates to pane-local 1-based coords", func(t *testing.T) {
+	t.Run("left press becomes a click at pane-local 0-based coords", func(t *testing.T) {
 		m := tea.MouseMsg{
-			X:      l.PaneScreenX, // top-left content cell
-			Y:      l.PaneScreenY,
+			X:      l.PaneScreenX + 2, // top-left content cell + offset
+			Y:      l.PaneScreenY + 3,
 			Button: tea.MouseButtonLeft,
 			Action: tea.MouseActionPress,
 		}
-		got := MouseToSGR(m, l)
-		want := []byte("\x1b[<0;1;1M")
-		if !bytes.Equal(got, want) {
-			t.Errorf("got %q, want %q", got, want)
+		got, ok := MouseToVT(m, l)
+		if !ok {
+			t.Fatal("expected ok inside pane")
+		}
+		click, isClick := got.(vt.MouseClick)
+		if !isClick {
+			t.Fatalf("expected MouseClick, got %T", got)
+		}
+		if click.X != 2 || click.Y != 3 {
+			t.Errorf("coords = (%d,%d), want (2,3)", click.X, click.Y)
+		}
+		if click.Button != vt.MouseLeft {
+			t.Errorf("button = %v, want left", click.Button)
 		}
 	})
 
-	t.Run("release uses lowercase final byte", func(t *testing.T) {
+	t.Run("release becomes a MouseRelease", func(t *testing.T) {
 		m := tea.MouseMsg{
-			X:      l.PaneScreenX + 2,
-			Y:      l.PaneScreenY + 3,
+			X:      l.PaneScreenX,
+			Y:      l.PaneScreenY,
 			Button: tea.MouseButtonLeft,
 			Action: tea.MouseActionRelease,
 		}
-		got := MouseToSGR(m, l)
-		want := []byte("\x1b[<0;3;4m")
-		if !bytes.Equal(got, want) {
-			t.Errorf("got %q, want %q", got, want)
+		got, _ := MouseToVT(m, l)
+		if _, ok := got.(vt.MouseRelease); !ok {
+			t.Errorf("expected MouseRelease, got %T", got)
 		}
 	})
 
-	t.Run("wheel up carries code 64", func(t *testing.T) {
+	t.Run("wheel up becomes a MouseWheel regardless of action", func(t *testing.T) {
 		m := tea.MouseMsg{
 			X:      l.PaneScreenX,
 			Y:      l.PaneScreenY,
 			Button: tea.MouseButtonWheelUp,
 			Action: tea.MouseActionPress,
 		}
-		got := MouseToSGR(m, l)
-		want := []byte("\x1b[<64;1;1M")
-		if !bytes.Equal(got, want) {
-			t.Errorf("got %q, want %q", got, want)
+		got, _ := MouseToVT(m, l)
+		wheel, ok := got.(vt.MouseWheel)
+		if !ok {
+			t.Fatalf("expected MouseWheel, got %T", got)
+		}
+		if wheel.Button != vt.MouseWheelUp {
+			t.Errorf("button = %v, want wheel-up", wheel.Button)
 		}
 	})
 
-	t.Run("modifiers add to the button code", func(t *testing.T) {
+	t.Run("modifiers carry through", func(t *testing.T) {
 		m := tea.MouseMsg{
 			X:      l.PaneScreenX,
 			Y:      l.PaneScreenY,
 			Button: tea.MouseButtonLeft,
 			Action: tea.MouseActionPress,
-			Shift:  true, // +4
-			Ctrl:   true, // +16
+			Shift:  true,
+			Ctrl:   true,
 		}
-		got := MouseToSGR(m, l)
-		want := []byte("\x1b[<20;1;1M")
-		if !bytes.Equal(got, want) {
-			t.Errorf("got %q, want %q", got, want)
+		got, _ := MouseToVT(m, l)
+		click := got.(vt.MouseClick)
+		if !click.Mod.Contains(vt.ModShift) || !click.Mod.Contains(vt.ModCtrl) {
+			t.Errorf("mods = %v, want shift+ctrl", click.Mod)
 		}
 	})
 
-	t.Run("outside the pane returns nil", func(t *testing.T) {
+	t.Run("outside the pane returns ok=false", func(t *testing.T) {
 		// A click in the sidebar region (left of the pane).
 		m := tea.MouseMsg{X: 0, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
-		if got := MouseToSGR(m, l); got != nil {
-			t.Errorf("expected nil outside pane, got %q", got)
+		if _, ok := MouseToVT(m, l); ok {
+			t.Error("expected ok=false outside pane")
 		}
 	})
 
-	t.Run("just past the pane edge returns nil", func(t *testing.T) {
+	t.Run("just past the pane edge returns ok=false", func(t *testing.T) {
 		m := tea.MouseMsg{
 			X:      l.PaneScreenX + l.PaneW, // one column too far right
 			Y:      l.PaneScreenY,
 			Button: tea.MouseButtonLeft,
 			Action: tea.MouseActionPress,
 		}
-		if got := MouseToSGR(m, l); got != nil {
-			t.Errorf("expected nil at pane edge, got %q", got)
+		if _, ok := MouseToVT(m, l); ok {
+			t.Error("expected ok=false at pane edge")
 		}
 	})
 }
