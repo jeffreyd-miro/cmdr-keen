@@ -11,9 +11,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/jeffreyd/cmdr-keen/internal/hooks"
-	"github.com/jeffreyd/cmdr-keen/internal/session"
-	"github.com/jeffreyd/cmdr-keen/internal/ui"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/hooks"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/session"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/ui"
 )
 
 func main() {
