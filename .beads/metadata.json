@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "cmdr_keen",
+  "project_id": "a77b4caf-5d0d-4009-a1cf-06c225159bd9"
+}
