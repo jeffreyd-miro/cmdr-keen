@@ -9,6 +9,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jeffreyd-miro/cmdr-keen/internal/hook"
@@ -17,6 +18,11 @@ import (
 	"github.com/jeffreyd-miro/cmdr-keen/internal/ui"
 )
 
+// version is the keen build version. It defaults to "dev" and can be set at
+// build time via -ldflags "-X main.version=v1.2.3". When unset, we fall back to
+// the module version embedded by `go install module@version`.
+var version = "dev"
+
 func main() {
 	// keen is a multi-call binary: when Claude runs it as a lifecycle hook
 	// (`keen __hook <event>`), act as the hook helper and exit without starting
@@ -24,6 +30,14 @@ func main() {
 	// self-contained — no sibling cc-deck-hook binary to install.
 	if len(os.Args) > 1 && os.Args[1] == "__hook" {
 		hook.Run(os.Args[2:])
+		return
+	}
+
+	// `keen --version` reports the build version and exits without starting the
+	// TUI. Handle it before the `--` passthrough scan so it isn't mistaken for a
+	// wrapped command's argument.
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("keen", resolveVersion())
 		return
 	}
 
@@ -62,4 +76,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, "keen:", err)
 		os.Exit(1)
 	}
+}
+
+// resolveVersion returns the build version, preferring an ldflags-injected
+// value and otherwise the module version recorded by `go install`. It falls
+// back to "dev" when no version information is available (e.g. `go run`).
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if v := info.Main.Version; v != "" && v != "(devel)" {
+			return v
+		}
+	}
+	return version
 }
