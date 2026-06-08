@@ -66,6 +66,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if st, ok := statusForEvent(msg.Event); ok {
 			m.mgr.MarkStatus(msg.Session, st)
 		}
+		m.mgr.SetContextTokens(msg.Session, msg.Tokens)
 		return m, m.maybeTitle(msg)
 
 	case titleMsg:

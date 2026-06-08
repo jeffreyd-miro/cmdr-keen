@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -15,6 +18,58 @@ var (
 	focusBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12"))
 	unfocusBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
 )
+
+const (
+	// defaultContextWindow is the context budget assumed when nothing overrides
+	// it. The transcript doesn't expose the model's real window (200k vs 1M), so
+	// users on extended-context models set KEEN_CONTEXT_WINDOW=1000000.
+	defaultContextWindow = 200_000
+	miniBarW             = 8 // cells in the sidebar's mini context bar
+)
+
+// contextWindowMax is the denominator for the sidebar usage bar.
+func contextWindowMax() int {
+	if v := os.Getenv("KEEN_CONTEXT_WINDOW"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultContextWindow
+}
+
+// contextLine is the small second row under a session: a compact bar of how
+// much of the context window is in use, colored like the canonical bottom
+// status line (green → yellow → red → bold red as it fills). A session we
+// haven't heard token counts from yet shows a faint empty bar.
+func contextLine(tokens int) string {
+	const indent = "    " // align under the label (marker 2 + glyph 1 + space 1)
+	if tokens <= 0 {
+		return indent + hintStyle.Render("["+strings.Repeat("·", miniBarW)+"]")
+	}
+
+	pct := tokens * 100 / contextWindowMax()
+	if pct > 100 {
+		pct = 100
+	}
+	filled := pct * miniBarW / 100
+	if filled > miniBarW {
+		filled = miniBarW
+	}
+	bar := strings.Repeat("▓", filled) + strings.Repeat("░", miniBarW-filled)
+
+	style := lipgloss.NewStyle()
+	switch {
+	case pct >= 90:
+		style = style.Bold(true).Foreground(lipgloss.Color("1")) // bold red
+	case pct >= 75:
+		style = style.Foreground(lipgloss.Color("1")) // red
+	case pct >= 50:
+		style = style.Foreground(lipgloss.Color("3")) // yellow
+	default:
+		style = style.Foreground(lipgloss.Color("2")) // green
+	}
+	return indent + style.Render(fmt.Sprintf("[%s] %d%%", bar, pct))
+}
 
 // statusGlyph returns a single colored cell for a session's status.
 func statusGlyph(st session.Status) string {
@@ -44,9 +99,11 @@ func RenderSidebar(l Layout, sessions []*session.Session, active int, focused bo
 		if i == active {
 			marker = "› "
 		}
-		// One line per session: the Haiku title once we know what the session is
-		// about, or a "freshie" placeholder until that title arrives. The working
+		// Two rows per session (kept in lockstep with layout.linesPerSession).
+		// Row 1: status glyph + the Haiku title once we know what the session is
+		// about, or a "freshie" placeholder until it arrives. The working
 		// directory is no longer shown — it's the same for every session.
+		// Row 2: a small context-window usage bar.
 		label := s.Title
 		if label == "" {
 			label = "freshie"
@@ -56,6 +113,7 @@ func RenderSidebar(l Layout, sessions []*session.Session, active int, focused bo
 			label = activeStyle.Render(label)
 		}
 		lines = append(lines, marker+statusGlyph(s.Status)+" "+label)
+		lines = append(lines, contextLine(s.ContextTokens))
 	}
 
 	// Pin the hint to the bottom of the box.

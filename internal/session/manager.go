@@ -101,3 +101,12 @@ func (m *Manager) SetTitle(id, title string) {
 		s.Title = title
 	}
 }
+
+// SetContextTokens records a session's reported context-window usage. Zero is
+// treated as "no fresh reading" and left as-is, so an event without a token
+// count never wipes a good value.
+func (m *Manager) SetContextTokens(id string, tokens int) {
+	if s := m.Find(id); s != nil && tokens > 0 {
+		s.ContextTokens = tokens
+	}
+}

@@ -51,6 +51,8 @@ type Session struct {
 	Cwd    string
 	Status Status
 
+	ContextTokens int // input-side tokens in use, reported by hooks (0 = unknown)
+
 	TitleRequested bool // guards against re-titling on every prompt
 
 	emu          *vt.SafeEmulator
