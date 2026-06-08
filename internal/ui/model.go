@@ -21,8 +21,9 @@ type summaryMsg struct {
 }
 
 // resummarizeEvery re-labels a session every N user prompts, so the sidebar
-// keeps up when the work changes tracks mid-session.
-const resummarizeEvery = 10
+// keeps up when the work changes tracks mid-session. At 1 we re-label on every
+// prompt (the in-flight guard in maybeSummarize still coalesces bursts).
+const resummarizeEvery = 1
 
 // tickInterval is how often the model wakes to repaint so the sidebar's elapsed
 // timers advance even while every session is quiet. The timer is minute-coarse,
@@ -128,13 +129,13 @@ func (m *Model) maybeSummarize(msg hooks.StatusEventMsg) tea.Cmd {
 		return nil
 	}
 	s.Titling = true
-	id, path, prompt := msg.Session, s.TranscriptPath, msg.Prompt
+	id, path, prompt, prevTopic := msg.Session, s.TranscriptPath, msg.Prompt, s.Topic
 	return func() tea.Msg {
 		text := titler.TranscriptTail(path, transcriptTailChars)
 		if text == "" { // transcript not readable yet — fall back to the prompt
 			text = prompt
 		}
-		sum, err := titler.Summarize(text)
+		sum, err := titler.Summarize(text, prevTopic)
 		if err != nil || sum.Task == "" {
 			sum.Task = titler.Heuristic(prompt)
 		}

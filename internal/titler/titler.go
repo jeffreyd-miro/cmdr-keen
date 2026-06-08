@@ -26,23 +26,35 @@ type Summary struct {
 
 const summaryInstruction = "You are labeling a coding session shown in a compact sidebar. " +
 	"Read the recent transcript and reply with EXACTLY three lines, nothing else:\n" +
-	"TOPIC: the overall project or goal in 2 to 4 words, lowercase\n" +
-	"TASK: what is being worked on right now in 2 to 5 words, lowercase\n" +
+	"TOPIC: the overall project or goal in 2 to 4 words, lowercase. This is a stable headline — " +
+	"keep it steady across the session so the user feels continuity. Only change it if the work has " +
+	"clearly moved to a different project or goal, not just a new step within the same one.\n" +
+	"TASK: what is being worked on right now in 2 to 5 words, lowercase. This is expected to change " +
+	"often as the work moves; make it reflect the latest activity in the transcript.\n" +
 	"PHASE: one word, exactly one of: planning building testing shipping done\n" +
-	"Use \"done\" only if the work looks finished and it is safe to close the session.\n\nTranscript:\n"
+	"Use \"done\" only if the work looks finished and it is safe to close the session.\n\n"
 
 // Summarize asks Haiku to distil recent session text into a Summary. The text
 // is typically a transcript tail (see TranscriptTail) but may be a raw prompt.
-func Summarize(text string) (Summary, error) {
+// prevTopic is the session's current TOPIC (may be empty); passing it lets Haiku
+// keep the headline stable instead of re-deriving — and drifting — every call.
+func Summarize(text, prevTopic string) (Summary, error) {
 	text = strings.TrimSpace(text)
 	if len(text) > maxInputChars { // keep the tail — recent context matters most
 		text = text[len(text)-maxInputChars:]
 	}
 
+	prompt := summaryInstruction
+	if prevTopic = strings.TrimSpace(prevTopic); prevTopic != "" {
+		prompt += "The session's current TOPIC is \"" + prevTopic + "\". Reuse it verbatim unless " +
+			"the work has clearly shifted to a different project or goal.\n\n"
+	}
+	prompt += "Transcript:\n" + text
+
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "claude", "-p", summaryInstruction+text, "--model", "haiku")
+	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--model", "haiku")
 	out, err := cmd.Output()
 	if err != nil {
 		return Summary{}, err
