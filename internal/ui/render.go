@@ -21,9 +21,10 @@ var (
 
 const (
 	// defaultContextWindow is the context budget assumed when nothing overrides
-	// it. The transcript doesn't expose the model's real window (200k vs 1M), so
-	// users on extended-context models set KEEN_CONTEXT_WINDOW=1000000.
-	defaultContextWindow = 200_000
+	// it. The transcript doesn't expose the model's real window, so we default to
+	// 1M (the common case on extended-context models like Opus); users on a
+	// smaller-window model set KEEN_CONTEXT_WINDOW to match.
+	defaultContextWindow = 1_000_000
 	miniBarW             = 8 // cells in the sidebar's mini context bar
 )
 
