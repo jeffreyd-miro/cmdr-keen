@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/jeffreyd/cmdr-keen/internal/session"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/session"
 )
 
 func TestStatusForEvent(t *testing.T) {

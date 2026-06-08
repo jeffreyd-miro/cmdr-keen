@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/jeffreyd/cmdr-keen/internal/session"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/session"
 )
 
 var (
@@ -176,7 +176,16 @@ func RenderSidebar(l Layout, sessions []*session.Session, active int, focused bo
 		}
 		lines = append(lines, sidebarIndent+hintStyle.Render(task))
 
-		lines = append(lines, sidebarIndent+phaseBadge(s.Phase)+contextBar(s.ContextTokens))
+		row3 := sidebarIndent + phaseBadge(s.Phase) + contextBar(s.ContextTokens)
+		// Right-align the elapsed timer into whatever space row 3 has left. On a
+		// narrow sidebar the badge + bar can already fill the width, so drop the
+		// timer rather than wrap (a wrapped row would desync click hit-testing).
+		if label := s.ElapsedLabel(); label != "" {
+			if gap := l.SidebarW - lipgloss.Width(row3) - len(label); gap >= 1 {
+				row3 += strings.Repeat(" ", gap) + hintStyle.Render(label)
+			}
+		}
+		lines = append(lines, row3)
 	}
 
 	// Color key for the status glyphs, just below the list — handy when getting

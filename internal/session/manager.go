@@ -4,8 +4,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/jeffreyd/cmdr-keen/internal/debug"
-	"github.com/jeffreyd/cmdr-keen/internal/hooks"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/debug"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/hooks"
 )
 
 // Manager holds the fixed-order list of sessions and which one is active.
