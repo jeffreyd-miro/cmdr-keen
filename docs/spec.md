@@ -101,7 +101,7 @@ passthrough) which is maximally faithful.
                                  │ hook events (JSON)            │ spawn with
                                  │                               │ --settings {hooks…}
               ┌──────────────────┴───────┐                       ▼
-              │ cc-deck-hook (tiny CLI)   │◄──── stdin JSON ───  claude (session i)
+              │ keen __hook (self re-exec)│◄──── stdin JSON ───  claude (session i)
               │ reads hook JSON + env,    │      from Claude Code hooks
               │ POSTs to the unix socket  │
               └───────────────────────────┘
@@ -134,8 +134,10 @@ passthrough) which is maximally faithful.
 - Wrapper runs a **unix-socket server**. On spawn it writes a per-session settings JSON
   and launches `claude --settings <file>` so hooks inject **without touching your global
   `~/.claude/settings.json`** (confirmed flag: `--settings <file-or-json>`).
-- Each hook = the tiny `cc-deck-hook` binary: reads hook JSON from stdin + `KEEN_SESSION`/
-  `KEEN_SOCKET` from env, forwards `{session,event,payload}` to the socket. (MVP fallback:
+- Each hook = keen re-invoking itself as `keen __hook <event>` (logic in `internal/hook`,
+  also built standalone as `cc-deck-hook`): reads hook JSON from stdin + `KEEN_SESSION`/
+  `KEEN_SOCKET` from env, forwards `{session,event,payload}` to the socket. Pointing hooks
+  at the running keen binary keeps a single `go install` self-contained. (MVP fallback:
   a `jq`+`nc` one-liner.)
 - Server maps events to the §3 state machine. Hooks exit 0 fast, never block Claude.
 
@@ -143,12 +145,12 @@ Per-session settings we generate:
 ```jsonc
 {
   "hooks": {
-    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "cc-deck-hook start" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "cc-deck-hook prompt" }] }],
-    "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "cc-deck-hook tool" }] }],
-    "Notification":     [{ "hooks": [{ "type": "command", "command": "cc-deck-hook notify" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "cc-deck-hook stop" }] }],
-    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "cc-deck-hook end" }] }]
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "\"<keen>\" __hook start" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "\"<keen>\" __hook crunching" }] }],
+    "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "\"<keen>\" __hook crunching" }] }],
+    "Notification":     [{ "hooks": [{ "type": "command", "command": "\"<keen>\" __hook waiting" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "\"<keen>\" __hook done" }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "\"<keen>\" __hook exit" }] }]
   }
 }
 ```
@@ -204,10 +206,12 @@ Update(msg):
   `--settings` injection (global `~/.claude` untouched). Unix socket in keen receives
   events → live color-coded glyphs: `UserPromptSubmit`/`PreToolUse` → ● crunching
   (yellow), `Notification` → ◐ waiting (red), `Stop` → ✓ done (green), `SessionEnd` →
-  ✕ exited. Build BOTH binaries so keen finds the helper beside itself:
-  `go build -o bin/keen ./cmd/keen && go build -o bin/cc-deck-hook ./cmd/cc-deck-hook`.
+  ✕ exited. keen is a single self-contained binary — it serves the hooks by
+  re-invoking itself (`keen __hook <event>`, logic in `internal/hook`), so
+  `go build -o bin/keen ./cmd/keen` (or `go install …/cmd/keen`) is the whole
+  install; `cmd/cc-deck-hook` remains as an optional standalone build.
   Permission-vs-idle split and `start`→ready left for later.
-- **M3 — Naming (✅ done).** `cc-deck-hook` extracts the first prompt from the
+- **M3 — Naming (✅ done).** the hook helper extracts the first prompt from the
   `UserPromptSubmit` payload → keen titles the tab once via `internal/titler`
   (`claude -p --model haiku`, reusing existing auth — no API key), heuristic fallback
   on error. Sidebar is now two lines per session: `dir` + faint Haiku subtitle (git

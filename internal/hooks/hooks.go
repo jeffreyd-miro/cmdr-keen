@@ -32,17 +32,21 @@ func (c *Config) SettingsPath(sessionID string) string {
 	return filepath.Join("/tmp", fmt.Sprintf("keen-%d-%s-settings.json", os.Getpid(), sessionID))
 }
 
-// ResolveHookBin locates the cc-deck-hook helper: env override, then next to the
-// running keen executable, then PATH.
+// ResolveHookBin returns the command prefix Claude should invoke at each
+// lifecycle event (keen appends the event name). keen is a multi-call binary,
+// so by default it points hooks back at the running keen executable via its
+// hidden `__hook` subcommand — this is what makes a single `go install` of keen
+// self-contained, with no sibling cc-deck-hook to locate.
+//
+// Resolution order: an explicit KEEN_HOOK_BIN override (used as-is), then
+// `<keen> __hook` (path quoted so spaces survive the shell), then a bare
+// `cc-deck-hook` on PATH as a last resort.
 func ResolveHookBin() string {
 	if p := os.Getenv("KEEN_HOOK_BIN"); p != "" {
 		return p
 	}
 	if exe, err := os.Executable(); err == nil {
-		cand := filepath.Join(filepath.Dir(exe), "cc-deck-hook")
-		if _, err := os.Stat(cand); err == nil {
-			return cand
-		}
+		return fmt.Sprintf("%q __hook", exe)
 	}
 	return "cc-deck-hook"
 }

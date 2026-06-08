@@ -43,13 +43,15 @@ sudo cp "$(go env GOPATH)/bin/keen" /usr/local/bin/keen
 
 ### Build from source
 
-Build **both** binaries into `bin/` — keen locates the hook helper next to
-itself:
-
 ```sh
 go build -o bin/keen ./cmd/keen
-go build -o bin/cc-deck-hook ./cmd/cc-deck-hook
 ```
+
+That's the whole install — `keen` is a single self-contained binary. It serves
+the Claude Code lifecycle hooks by re-invoking *itself* (`keen __hook <event>`),
+so there's no second helper to build or keep on your `PATH`. (A standalone
+`cc-deck-hook` build still exists under `cmd/cc-deck-hook` for anyone wiring
+hooks by hand, but it's optional.)
 
 ## Run
 
@@ -129,8 +131,9 @@ focus.
 ## Layout
 
 ```
-cmd/keen/            entry point
-cmd/cc-deck-hook/    tiny Claude Code hook helper (reports status to keen)
+cmd/keen/            entry point (also serves hooks via `keen __hook`)
+internal/hook/       Claude Code hook helper: reports status to keen's socket
+cmd/cc-deck-hook/    optional standalone build of internal/hook
 internal/session/    one claude process: PTY + terminal emulator + lifecycle
 internal/ui/         Bubble Tea model, sidebar/pane render, key + mouse input
 internal/hooks/      unix-socket status server + per-session settings generation

@@ -11,12 +11,22 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/jeffreyd-miro/cmdr-keen/internal/hook"
 	"github.com/jeffreyd-miro/cmdr-keen/internal/hooks"
 	"github.com/jeffreyd-miro/cmdr-keen/internal/session"
 	"github.com/jeffreyd-miro/cmdr-keen/internal/ui"
 )
 
 func main() {
+	// keen is a multi-call binary: when Claude runs it as a lifecycle hook
+	// (`keen __hook <event>`), act as the hook helper and exit without starting
+	// the TUI. This is what lets a single `go install` of keen be entirely
+	// self-contained — no sibling cc-deck-hook binary to install.
+	if len(os.Args) > 1 && os.Args[1] == "__hook" {
+		hook.Run(os.Args[2:])
+		return
+	}
+
 	// Command to run per session: everything after `--`, else the default
 	// claude invocation.
 	args := []string{"claude", "--permission-mode", "auto"}
