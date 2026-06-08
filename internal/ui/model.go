@@ -48,6 +48,11 @@ type Model struct {
 	sidebarFocus bool
 	ready        bool
 
+	// confirmClose is armed when 'x' is pressed in the sidebar; the next key
+	// either confirms the close ('x'/'y') or cancels it. Guards a running
+	// session against an accidental single keystroke.
+	confirmClose bool
+
 	initialCwd  string
 	initialArgs []string
 }
@@ -155,6 +160,9 @@ func statusForEvent(event string) (session.Status, bool) {
 }
 
 func (m *Model) handleKey(k tea.KeyMsg) tea.Cmd {
+	if m.confirmClose { // a close is armed — this key confirms or cancels it
+		return m.handleConfirmClose(k)
+	}
 	if k.Type == tea.KeyCtrlK { // the keen prefix — never reaches Claude
 		m.sidebarFocus = !m.sidebarFocus
 		return nil
@@ -187,11 +195,25 @@ func (m *Model) handleSidebarKey(k tea.KeyMsg) tea.Cmd {
 		_ = m.mgr.Spawn(m.initialCwd, m.initialArgs)
 		m.sidebarFocus = false
 	case rune1 == "x":
-		m.mgr.Close(m.mgr.ActiveIndex())
+		if m.mgr.Count() > 0 { // arm confirmation; the next key decides
+			m.confirmClose = true
+		}
 	case rune1 == "q", k.Type == tea.KeyCtrlC:
 		return tea.Quit
 	case rune1 >= "1" && rune1 <= "9":
 		m.mgr.SetActive(int(k.Runes[0]-'1'), "key:number")
+	}
+	return nil
+}
+
+// handleConfirmClose resolves an armed close: 'x' or 'y' confirms and closes
+// the active session, any other key cancels. Either way the prompt clears.
+func (m *Model) handleConfirmClose(k tea.KeyMsg) tea.Cmd {
+	m.confirmClose = false
+	if k.Type == tea.KeyRunes && len(k.Runes) == 1 {
+		if r := k.Runes[0]; r == 'x' || r == 'y' {
+			m.mgr.Close(m.mgr.ActiveIndex())
+		}
 	}
 	return nil
 }
@@ -233,7 +255,7 @@ func (m *Model) View() string {
 	if !m.ready {
 		return "starting keen…"
 	}
-	sidebar := RenderSidebar(m.layout, m.mgr.Sessions(), m.mgr.ActiveIndex(), m.sidebarFocus)
+	sidebar := RenderSidebar(m.layout, m.mgr.Sessions(), m.mgr.ActiveIndex(), m.sidebarFocus, m.confirmClose)
 	pane := RenderPane(m.layout, m.mgr.Active(), !m.sidebarFocus)
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, pane)
 }

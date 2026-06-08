@@ -17,6 +17,8 @@ var (
 
 	focusBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12"))
 	unfocusBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
+
+	confirmStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1")) // red — armed close prompt
 )
 
 const (
@@ -145,8 +147,9 @@ func statusGlyph(st session.Status) string {
 	}
 }
 
-// RenderSidebar draws the fixed-order session list, full terminal height.
-func RenderSidebar(l Layout, sessions []*session.Session, active int, focused bool) string {
+// RenderSidebar draws the fixed-order session list, full terminal height. When
+// confirming is set, the footer turns into a close-confirmation prompt.
+func RenderSidebar(l Layout, sessions []*session.Session, active int, focused, confirming bool) string {
 	contentH := l.H - boxBorder
 	lines := make([]string, 0, contentH)
 
@@ -202,6 +205,10 @@ func RenderSidebar(l Layout, sessions []*session.Session, active int, focused bo
 	// click-drag selection only works while a modifier is held.
 	hint := hintStyle.Render("⌃k list · n new · x close")
 	copyHint := hintStyle.Render("⌥-drag to select/copy")
+	if confirming { // an 'x' is armed — replace the footer with a clear prompt
+		hint = confirmStyle.Render("close session?")
+		copyHint = confirmStyle.Render("x confirm · any cancel")
+	}
 	used := len(lines) + 2
 	for used < contentH {
 		lines = append(lines, "")
