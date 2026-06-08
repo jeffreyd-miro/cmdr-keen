@@ -11,10 +11,11 @@ import (
 
 // Event is one status update reported by a hook helper over the socket.
 type Event struct {
-	Session string `json:"session"`
-	Event   string `json:"event"`
-	Prompt  string `json:"prompt,omitempty"` // first user prompt, for titling
-	Tokens  int    `json:"tokens,omitempty"` // input-side context tokens in use
+	Session    string `json:"session"`
+	Event      string `json:"event"`
+	Prompt     string `json:"prompt,omitempty"`     // latest user prompt, for titling
+	Tokens     int    `json:"tokens,omitempty"`     // input-side context tokens in use
+	Transcript string `json:"transcript,omitempty"` // transcript path, for re-summarizing
 }
 
 // StatusEventMsg is delivered into the Bubble Tea program for each hook event.

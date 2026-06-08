@@ -1,6 +1,7 @@
 package titler
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -39,5 +40,72 @@ func TestHeuristic(t *testing.T) {
 	in := "Implement the parser\nand then write tests"
 	if got, want := Heuristic(in), "Implement the parser"; got != want {
 		t.Errorf("Heuristic() = %q, want %q", got, want)
+	}
+}
+
+func TestParseSummary(t *testing.T) {
+	out := "TOPIC: keen sidebar\nTASK: fix mouse scroll\nPHASE: building\n"
+	s := parseSummary(out)
+	if s.Topic != "keen sidebar" || s.Task != "fix mouse scroll" || s.Phase != "building" {
+		t.Errorf("parseSummary = %+v", s)
+	}
+}
+
+func TestParseSummaryTolerant(t *testing.T) {
+	// Extra prose, lowercase labels, missing fields, and a phase synonym.
+	out := "Sure! Here you go:\ntopic: the parser\nphase: just shipping it now\n"
+	s := parseSummary(out)
+	if s.Topic != "the parser" {
+		t.Errorf("Topic = %q, want %q", s.Topic, "the parser")
+	}
+	if s.Task != "" {
+		t.Errorf("Task = %q, want empty", s.Task)
+	}
+	if s.Phase != "shipping" {
+		t.Errorf("Phase = %q, want %q", s.Phase, "shipping")
+	}
+}
+
+func TestNormalizePhase(t *testing.T) {
+	tests := map[string]string{
+		"planning":           "planning",
+		"  Building ":        "building",
+		"test":               "testing",
+		"we are debugging":   "testing",
+		"merging the branch": "shipping",
+		"all wrapped up":     "done",
+		"":                   "",
+		"vibes":              "",
+	}
+	for in, want := range tests {
+		if got := normalizePhase(in); got != want {
+			t.Errorf("normalizePhase(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestTranscriptTail(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/transcript.jsonl"
+	// A string-content user prompt, an array-content assistant turn (text +
+	// tool_use — only the text should survive), and a tool_result user turn
+	// (no text blocks — should be dropped entirely).
+	lines := []string{
+		`{"type":"user","message":{"role":"user","content":"fix the mouse scroll"}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"On it."},{"type":"tool_use","name":"Edit","input":{}}]}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := TranscriptTail(path, 0)
+	want := "user: fix the mouse scroll\nassistant: On it."
+	if got != want {
+		t.Errorf("TranscriptTail = %q, want %q", got, want)
+	}
+
+	if TranscriptTail(dir+"/missing.jsonl", 0) != "" {
+		t.Errorf("TranscriptTail on missing file should be empty")
 	}
 }
