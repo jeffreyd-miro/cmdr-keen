@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -27,9 +28,20 @@ func main() {
 	var payload struct {
 		Prompt         string `json:"prompt"`
 		TranscriptPath string `json:"transcript_path"`
+		Message        string `json:"message"`
 	}
 	if in, err := io.ReadAll(os.Stdin); err == nil {
 		_ = json.Unmarshal(in, &payload)
+	}
+
+	// The Notification hook fires for two unrelated situations: a mid-turn
+	// permission/attention request (should go red), and the ~60s idle timeout
+	// "Claude is waiting for your input" (must NOT — the turn already ended and
+	// keen marked it done). Distinguish by the message text and drop the idle
+	// flavor so a finished session stays green. Wording is Claude-version
+	// dependent; keen's MarkStatus has a Done-precedence backstop if it drifts.
+	if event == "waiting" && isIdleNotification(payload.Message) {
+		return
 	}
 
 	sock := os.Getenv("KEEN_SOCKET")
@@ -46,16 +58,26 @@ func main() {
 	_ = conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
 
 	msg := struct {
-		Session string `json:"session"`
-		Event   string `json:"event"`
-		Prompt  string `json:"prompt,omitempty"`
-		Tokens  int    `json:"tokens,omitempty"`
-	}{Session: sess, Event: event, Prompt: payload.Prompt}
+		Session    string `json:"session"`
+		Event      string `json:"event"`
+		Prompt     string `json:"prompt,omitempty"`
+		Tokens     int    `json:"tokens,omitempty"`
+		Transcript string `json:"transcript,omitempty"`
+	}{Session: sess, Event: event, Prompt: payload.Prompt, Transcript: payload.TranscriptPath}
 	if payload.TranscriptPath != "" {
 		msg.Tokens = contextTokens(payload.TranscriptPath)
 	}
 	b, _ := json.Marshal(msg)
 	_, _ = conn.Write(append(b, '\n'))
+}
+
+// isIdleNotification reports whether a Notification message is the prompt-idle
+// timeout (which keen ignores) rather than a permission/attention request
+// (which keen surfaces as red). Claude's idle message is "Claude is waiting for
+// your input"; matching the stable "waiting for your input" tail keeps this
+// resilient to minor wording changes. Match is case-insensitive.
+func isIdleNotification(message string) bool {
+	return strings.Contains(strings.ToLower(message), "waiting for your input")
 }
 
 // contextTokens reads the session transcript and returns the input-side token

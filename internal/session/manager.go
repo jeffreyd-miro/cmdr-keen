@@ -1,7 +1,10 @@
 package session
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/jeffreyd/cmdr-keen/internal/debug"
 	"github.com/jeffreyd/cmdr-keen/internal/hooks"
 )
 
@@ -27,7 +30,7 @@ func (m *Manager) Spawn(cwd string, args []string) error {
 		return err
 	}
 	m.sessions = append(m.sessions, s)
-	m.setActive(len(m.sessions) - 1)
+	m.setActive(len(m.sessions)-1, "spawn")
 	return nil
 }
 
@@ -42,11 +45,22 @@ func (m *Manager) Active() *Session {
 	return m.sessions[m.active]
 }
 
-func (m *Manager) SetActive(i int) { m.setActive(i) }
+// SetActive switches the focused session. reason is a short tag (e.g. "mouse",
+// "key:j", "number") recorded in the debug log so a stray switch can be traced
+// to what triggered it.
+func (m *Manager) SetActive(i int, reason string) { m.setActive(i, reason) }
 
-func (m *Manager) setActive(i int) {
+func (m *Manager) setActive(i int, reason string) {
 	if i < 0 || i >= len(m.sessions) {
+		debug.Logf("setActive(%d, %q) ignored: out of range (count %d, active %d)", i, reason, len(m.sessions), m.active)
 		return
+	}
+	if i != m.active && debug.Enabled() {
+		from, to := "-", m.sessions[i].ID
+		if m.active >= 0 && m.active < len(m.sessions) {
+			from = m.sessions[m.active].ID
+		}
+		debug.Logf("setActive: %s (idx %d) -> %s (idx %d) reason=%s", from, m.active, to, i, reason)
 	}
 	for j, s := range m.sessions {
 		if j == i {
@@ -86,19 +100,53 @@ func (m *Manager) Close(i int) {
 		m.active = len(m.sessions) - 1
 	}
 	if m.active >= 0 {
-		m.setActive(m.active)
+		m.setActive(m.active, "close")
 	}
 }
 
 func (m *Manager) MarkStatus(id string, st Status) {
 	if s := m.Find(id); s != nil {
+		// Don't let a stray "waiting" repaint a finished session red. An idle
+		// Notification arrives ~60s after Stop; a real permission prompt fires
+		// mid-turn (while Crunching), so guarding only StatusDone suppresses
+		// the idle case without hiding genuine attention requests. The hook
+		// also filters idle Notifications at the source (cc-deck-hook); this is
+		// the version-proof backstop if Claude's wording ever drifts.
+		if st == StatusWaiting && s.Status == StatusDone {
+			return
+		}
+		if s.Status != st { // reset the elapsed timer only on a real transition
+			s.StatusSince = time.Now()
+		}
 		s.Status = st
 	}
 }
 
-func (m *Manager) SetTitle(id, title string) {
-	if s := m.Find(id); s != nil && title != "" {
-		s.Title = title
+// SetSummary applies a fresh set of LLM labels and clears the in-flight guard.
+// Empty fields are left untouched so a partial or flaky re-summarize never wipes
+// a good topic/task/phase we already had.
+func (m *Manager) SetSummary(id, topic, task, phase string) {
+	s := m.Find(id)
+	if s == nil {
+		return
+	}
+	s.Titling = false
+	if topic != "" {
+		s.Topic = topic
+	}
+	if task != "" {
+		s.Task = task
+	}
+	if phase != "" {
+		s.Phase = phase
+	}
+}
+
+// SetTranscript records the latest transcript path reported for a session, used
+// as the source for re-summarizing.
+func (m *Manager) SetTranscript(id, path string) {
+	if s := m.Find(id); s != nil && path != "" {
+		s.TranscriptPath = path
 	}
 }
 
