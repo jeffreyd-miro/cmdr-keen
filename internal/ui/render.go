@@ -37,14 +37,53 @@ func contextWindowMax() int {
 	return defaultContextWindow
 }
 
-// contextLine is the small second row under a session: a compact bar of how
-// much of the context window is in use, colored like the canonical bottom
-// status line (green → yellow → red → bold red as it fills). A session we
-// haven't heard token counts from yet shows a faint empty bar.
-func contextLine(tokens int) string {
-	const indent = "    " // align under the label (marker 2 + glyph 1 + space 1)
+// sidebarIndent aligns rows 2+ under a session's row-1 label (marker 2 + glyph
+// 1 + space 1).
+const sidebarIndent = "    "
+
+// phaseW pads the phase word so the context bars line up across sessions.
+const phaseW = 8
+
+// phaseBadge renders the work phase as a short colored word, padded to phaseW
+// so what follows it stays column-aligned. An unknown phase shows a faint dot.
+func phaseBadge(phase string) string {
+	if phase == "" {
+		return hintStyle.Render(padRight("·", phaseW))
+	}
+	var c lipgloss.Color
+	switch phase {
+	case "planning":
+		c = lipgloss.Color("4") // blue
+	case "building":
+		c = lipgloss.Color("6") // cyan
+	case "testing":
+		c = lipgloss.Color("3") // yellow
+	case "shipping":
+		c = lipgloss.Color("5") // magenta
+	case "done":
+		c = lipgloss.Color("2") // green
+	default:
+		c = lipgloss.Color("7")
+	}
+	return lipgloss.NewStyle().Foreground(c).Render(padRight(phase, phaseW))
+}
+
+// padRight pads s with spaces to exactly w columns (truncating if longer).
+func padRight(s string, w int) string {
+	r := []rune(s)
+	if len(r) >= w {
+		return string(r[:w])
+	}
+	return s + strings.Repeat(" ", w-len(r))
+}
+
+// contextBar is a compact gauge of how much of the context window is in use,
+// colored like the canonical bottom status line (green → yellow → red → bold
+// red as it fills). A session we haven't heard token counts from yet shows a
+// faint empty bar.
+func contextBar(tokens int) string {
 	if tokens <= 0 {
-		return indent + hintStyle.Render("["+strings.Repeat("·", miniBarW)+"]")
+		return hintStyle.Render("[" + strings.Repeat("·", miniBarW) + "]")
 	}
 
 	pct := tokens * 100 / contextWindowMax()
@@ -68,8 +107,26 @@ func contextLine(tokens int) string {
 	default:
 		style = style.Foreground(lipgloss.Color("2")) // green
 	}
-	return indent + style.Render(fmt.Sprintf("[%s] %d%%", bar, pct))
+	return style.Render(fmt.Sprintf("[%s] %d%%", bar, pct))
 }
+
+// legend is the sidebar color key — glyph → what it means — shown below the
+// session list when the terminal is tall enough (see Layout.showLegend).
+// Ordered by how much each state wants your attention, so "needs you" reads
+// first.
+var legend = []struct {
+	st    session.Status
+	label string
+}{
+	{session.StatusWaiting, "needs you"},
+	{session.StatusCrunching, "working"},
+	{session.StatusDone, "done"},
+}
+
+// legendHeight is how many sidebar rows the legend occupies: one per entry plus
+// a leading blank separating it from the list. Derived from legend so the
+// layout math can't drift from what RenderSidebar actually draws.
+func legendHeight() int { return len(legend) + 1 }
 
 // statusGlyph returns a single colored cell for a session's status.
 func statusGlyph(st session.Status) string {
@@ -99,31 +156,48 @@ func RenderSidebar(l Layout, sessions []*session.Session, active int, focused bo
 		if i == active {
 			marker = "› "
 		}
-		// Two rows per session (kept in lockstep with layout.linesPerSession).
-		// Row 1: status glyph + the Haiku title once we know what the session is
-		// about, or a "freshie" placeholder until it arrives. The working
-		// directory is no longer shown — it's the same for every session.
-		// Row 2: a small context-window usage bar.
-		label := s.Title
-		if label == "" {
-			label = "freshie"
-		}
-		label = truncate(label, l.SidebarW-4) // marker(2)+glyph(1)+space(1)
+		// Three rows per session (kept in lockstep with layout.linesPerSession),
+		// all derived from a Haiku summary of the recent transcript:
+		//   Row 1: status glyph + the overall topic (what this session is about).
+		//   Row 2: the current task (what it's doing right now).
+		//   Row 3: a phase badge (planning→done) + the context-window usage bar.
+		// Until the first summary lands we show a "freshie" placeholder.
+		topic := firstNonEmpty(s.Topic, s.Task, "freshie")
+		topic = truncate(topic, l.SidebarW-4) // marker(2)+glyph(1)+space(1)
 		if i == active {
-			label = activeStyle.Render(label)
+			topic = activeStyle.Render(topic)
 		}
-		lines = append(lines, marker+statusGlyph(s.Status)+" "+label)
-		lines = append(lines, contextLine(s.ContextTokens))
+		lines = append(lines, marker+statusGlyph(s.Status)+" "+topic)
+
+		task := "…"
+		if s.Task != "" {
+			task = truncate(s.Task, l.SidebarW-len(sidebarIndent))
+		}
+		lines = append(lines, sidebarIndent+hintStyle.Render(task))
+
+		lines = append(lines, sidebarIndent+phaseBadge(s.Phase)+contextBar(s.ContextTokens))
 	}
 
-	// Pin the hint to the bottom of the box.
+	// Color key for the status glyphs, just below the list — handy when getting
+	// started. Yields to the session list on short terminals (showLegend).
+	if l.showLegend(len(sessions)) {
+		lines = append(lines, "")
+		for _, e := range legend {
+			lines = append(lines, statusGlyph(e.st)+" "+hintStyle.Render(e.label))
+		}
+	}
+
+	// Pin the hint to the bottom of the box. The second line tells users how to
+	// copy: keen holds the terminal in mouse-tracking mode, so native
+	// click-drag selection only works while a modifier is held.
 	hint := hintStyle.Render("⌃k list · n new · x close")
-	used := len(lines) + 1
+	copyHint := hintStyle.Render("⌥-drag to select/copy")
+	used := len(lines) + 2
 	for used < contentH {
 		lines = append(lines, "")
 		used++
 	}
-	lines = append(lines, hint)
+	lines = append(lines, hint, copyHint)
 
 	box := unfocusBorder
 	if focused {
@@ -145,6 +219,16 @@ func RenderPane(l Layout, s *session.Session, focused bool) string {
 		body = s.Render()
 	}
 	return box.Width(l.PaneW).Height(l.PaneH).Render(body)
+}
+
+// firstNonEmpty returns the first non-empty string, or "" if all are empty.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // truncate shortens s to at most w visible columns, adding an ellipsis.
