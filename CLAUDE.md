@@ -49,6 +49,20 @@ bd close <id>         # Complete work
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
 
+## Git Workflow Policy
+
+This policy is authoritative and **supersedes** the "PUSH TO REMOTE is MANDATORY"
+language in the beads-managed Session Completion block above.
+
+- **Commit by default.** When a unit of work is complete (feature done, bug
+  fixed, quality gates green), commit it without waiting to be asked. Stage only
+  the files belonging to that work — never `git add .` over unrelated changes you
+  didn't make; surface those instead.
+- **Push needs approval.** Do NOT `git push` or `bd dolt push` until the user
+  explicitly approves. After committing, report what's ready and ask before
+  pushing. "Work isn't complete until pushed" does NOT apply here — a clean local
+  commit is a complete, acceptable stopping point.
+
 
 ## Build & Test
 
