@@ -97,7 +97,8 @@ files in may not work** — drag them in instead.
 |---|---|---|
 | `·` grey | starting | `SessionStart` |
 | `●` yellow | crunching | `UserPromptSubmit`, `PreToolUse` |
-| `◐` red | waiting on you | `Notification` |
+| `◐` red | waiting on you (permission) | `Notification` (permission prompt) |
+| `◐` magenta | waiting on you (idle) | `Notification` (idle ping) |
 | `✓` green | all done (your move) | `Stop` |
 | `✕` faint | exited | `SessionEnd` |
 

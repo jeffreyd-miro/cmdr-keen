@@ -106,12 +106,12 @@ func (m *Manager) Close(i int) {
 
 func (m *Manager) MarkStatus(id string, st Status) {
 	if s := m.Find(id); s != nil {
-		// Don't let a stray "waiting" repaint a finished session red. An idle
-		// Notification arrives ~60s after Stop; a real permission prompt fires
-		// mid-turn (while Crunching), so guarding only StatusDone suppresses
-		// the idle case without hiding genuine attention requests. The hook
-		// also filters idle Notifications at the source (cc-deck-hook); this is
-		// the version-proof backstop if Claude's wording ever drifts.
+		// Don't let a stray permission "waiting" repaint a finished session red.
+		// A real permission prompt fires mid-turn (while Crunching), never after
+		// Stop, so guarding StatusWaiting-while-Done only ever catches an idle
+		// Notification that the hook misclassified as permission (Claude's
+		// wording drifting). StatusIdle is exempt: an idle ping is *meant* to
+		// repaint a done-but-untouched session magenta, so it overrides Done.
 		if st == StatusWaiting && s.Status == StatusDone {
 			return
 		}

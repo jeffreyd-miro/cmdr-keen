@@ -35,7 +35,7 @@ func TestElapsedLabelOnlyForActiveStates(t *testing.T) {
 			t.Errorf("ElapsedLabel for status %v = %q, want \"\"", st, got)
 		}
 	}
-	for _, st := range []Status{StatusCrunching, StatusWaiting} {
+	for _, st := range []Status{StatusCrunching, StatusWaiting, StatusIdle} {
 		s := &Session{Status: st, StatusSince: since}
 		if got := s.ElapsedLabel(); got != "3m" {
 			t.Errorf("ElapsedLabel for status %v = %q, want \"3m\"", st, got)
@@ -50,9 +50,10 @@ func TestElapsedLabelZeroTimeIsBlank(t *testing.T) {
 	}
 }
 
-// A finished session must stay green when the ~60s idle Notification arrives as
-// a stray "waiting" (cmdr-keen-o83). A genuine permission prompt fires while
-// Crunching, so that transition must still go through.
+// A finished session must stay green when a permission "waiting" arrives after
+// Stop — that only happens if the hook misclassified the ~60s idle Notification
+// (cmdr-keen-o83). A genuine permission prompt fires while Crunching, so that
+// transition must still go through.
 func TestMarkStatusDonePrecedence(t *testing.T) {
 	m := &Manager{sessions: []*Session{{ID: "s1", Status: StatusDone}}}
 
@@ -66,5 +67,16 @@ func TestMarkStatusDonePrecedence(t *testing.T) {
 	m.MarkStatus("s1", StatusWaiting)
 	if got := m.Find("s1").Status; got != StatusWaiting {
 		t.Errorf("waiting after crunching = %v, want StatusWaiting (go red)", got)
+	}
+}
+
+// The idle ping is exempt from the Done backstop: it's meant to repaint a
+// finished-but-untouched session magenta, so it must override Done.
+func TestMarkStatusIdleOverridesDone(t *testing.T) {
+	m := &Manager{sessions: []*Session{{ID: "s1", Status: StatusDone}}}
+
+	m.MarkStatus("s1", StatusIdle)
+	if got := m.Find("s1").Status; got != StatusIdle {
+		t.Errorf("idle after done = %v, want StatusIdle (go magenta)", got)
 	}
 }

@@ -152,6 +152,8 @@ func statusForEvent(event string) (session.Status, bool) {
 		return session.StatusCrunching, true
 	case "waiting":
 		return session.StatusWaiting, true
+	case "idle":
+		return session.StatusIdle, true
 	case "done":
 		return session.StatusDone, true
 	case "exit":

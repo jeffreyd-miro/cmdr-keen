@@ -43,14 +43,14 @@ func Run(args []string) {
 		_ = json.Unmarshal(in, &payload)
 	}
 
-	// The Notification hook fires for two unrelated situations: a mid-turn
-	// permission/attention request (should go red), and the ~60s idle timeout
-	// "Claude is waiting for your input" (must NOT — the turn already ended and
-	// keen marked it done). Distinguish by the message text and drop the idle
-	// flavor so a finished session stays green. Wording is Claude-version
+	// The Notification hook fires for two unrelated situations, which keen shows
+	// in different colors: a mid-turn permission/attention request (red) and the
+	// ~60s idle timeout "Claude is waiting for your input" (magenta — it pings
+	// you after a finished turn sat untouched). Distinguish by the message text
+	// and re-tag the idle flavor as its own event. Wording is Claude-version
 	// dependent; keen's MarkStatus has a Done-precedence backstop if it drifts.
 	if event == "waiting" && isIdleNotification(payload.Message) {
-		return
+		event = "idle"
 	}
 
 	sock := os.Getenv("KEEN_SOCKET")

@@ -121,7 +121,8 @@ var legend = []struct {
 	st    session.Status
 	label string
 }{
-	{session.StatusWaiting, "needs you"},
+	{session.StatusWaiting, "needs you · permission"},
+	{session.StatusIdle, "needs you · idle"},
 	{session.StatusCrunching, "working"},
 	{session.StatusDone, "done"},
 }
@@ -137,7 +138,9 @@ func statusGlyph(st session.Status) string {
 	case session.StatusCrunching:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("●") // yellow
 	case session.StatusWaiting:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("◐") // red
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("◐") // red — permission
+	case session.StatusIdle:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render("◐") // magenta — idle ping
 	case session.StatusDone:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("✓") // green
 	case session.StatusExited:

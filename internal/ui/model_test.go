@@ -52,6 +52,7 @@ func TestStatusForEvent(t *testing.T) {
 	}{
 		{"crunching", session.StatusCrunching, true},
 		{"waiting", session.StatusWaiting, true},
+		{"idle", session.StatusIdle, true},
 		{"done", session.StatusDone, true},
 		{"exit", session.StatusExited, true},
 		// "start" is intentionally unmapped: a freshly launched session stays

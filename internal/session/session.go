@@ -37,7 +37,8 @@ type Status int
 const (
 	StatusStarting Status = iota
 	StatusCrunching
-	StatusWaiting // blocked on you (permission or idle)
+	StatusWaiting // blocked on you (permission) — fires mid-turn, shows red
+	StatusIdle    // pinged you after going idle (~60s post-Stop) — shows magenta
 	StatusDone
 	StatusExited
 )
@@ -45,10 +46,10 @@ const (
 // ElapsedLabel is a coarse "how long the session has been in its current state"
 // label for the sidebar — minutes then hours (1m, 5m, 59m, 1h, …), with no
 // seconds. It's only meaningful while there's something to wait on, so it
-// returns "" for every state except Crunching and Waiting.
+// returns "" for every state except Crunching and the two waiting-on-you states.
 func (s *Session) ElapsedLabel() string {
 	switch s.Status {
-	case StatusCrunching, StatusWaiting:
+	case StatusCrunching, StatusWaiting, StatusIdle:
 	default:
 		return ""
 	}
