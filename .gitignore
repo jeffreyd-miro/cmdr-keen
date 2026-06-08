@@ -1,0 +1,10 @@
+# Built binaries
+/bin/
+
+# Spike artifacts
+/embed-vt
+/passthrough
+
+# Go
+*.test
+*.out
