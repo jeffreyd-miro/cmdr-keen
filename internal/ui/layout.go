@@ -54,8 +54,10 @@ func ComputeLayout(w, h int) Layout {
 	}
 }
 
-// linesPerSession is how many sidebar rows one session occupies (the title line).
-const linesPerSession = 1
+// linesPerSession is how many sidebar rows one session occupies. RenderSidebar
+// draws two rows per entry — the status+name line and the faint title/branch
+// subtitle (see render.go) — so hit-testing must step by two to stay aligned.
+const linesPerSession = 2
 
 // SessionIndexAt returns the session row index a click landed on, or -1 if the
 // click wasn't on a session entry in the sidebar.
