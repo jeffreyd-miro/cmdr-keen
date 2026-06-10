@@ -108,12 +108,15 @@ func (m *Manager) MarkStatus(id string, st Status) {
 	if s := m.Find(id); s != nil {
 		// Don't let a stray permission "waiting" repaint a finished session red.
 		// A real permission prompt fires mid-turn (while Crunching), never after
-		// Stop, so guarding StatusWaiting-while-Done only ever catches an idle
-		// Notification that the hook misclassified as permission (Claude's
-		// wording drifting). StatusIdle is exempt: an idle ping is *meant* to
-		// repaint a done-but-untouched session magenta, so it overrides Done.
+		// Stop, so a StatusWaiting arriving while Done is necessarily the ~60s
+		// idle Notification whose wording drifted past isIdleNotification. Don't
+		// swallow it — that leaves the green ✓ stuck exactly when the idle ping
+		// means to say "this finished session is waiting on you". Reclassify it
+		// as the idle ping it really is, so it surfaces as magenta "needs you"
+		// instead of looking complete. (A correctly-tagged StatusIdle already
+		// flows through unchanged and overrides Done.)
 		if st == StatusWaiting && s.Status == StatusDone {
-			return
+			st = StatusIdle
 		}
 		if s.Status != st { // reset the elapsed timer only on a real transition
 			s.StatusSince = time.Now()

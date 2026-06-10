@@ -50,16 +50,18 @@ func TestElapsedLabelZeroTimeIsBlank(t *testing.T) {
 	}
 }
 
-// A finished session must stay green when a permission "waiting" arrives after
-// Stop — that only happens if the hook misclassified the ~60s idle Notification
-// (cmdr-keen-o83). A genuine permission prompt fires while Crunching, so that
-// transition must still go through.
+// A permission "waiting" arriving after Stop is never a real permission prompt
+// (those fire mid-turn, while Crunching) — it's the ~60s idle Notification whose
+// wording drifted past isIdleNotification (cmdr-keen-o83). It must NOT stay green
+// (that hides the ping) and must NOT go red (that's the o83 regression); it gets
+// reclassified to idle/magenta "needs you". A genuine permission prompt fires
+// while Crunching, so that transition must still go red untouched.
 func TestMarkStatusDonePrecedence(t *testing.T) {
 	m := &Manager{sessions: []*Session{{ID: "s1", Status: StatusDone}}}
 
 	m.MarkStatus("s1", StatusWaiting)
-	if got := m.Find("s1").Status; got != StatusDone {
-		t.Errorf("waiting after done = %v, want StatusDone (stay green)", got)
+	if got := m.Find("s1").Status; got != StatusIdle {
+		t.Errorf("waiting after done = %v, want StatusIdle (reclassified to magenta)", got)
 	}
 
 	// Crunching from a mid-turn permission flow then waiting still goes red.
